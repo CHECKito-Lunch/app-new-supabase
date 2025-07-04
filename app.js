@@ -11,30 +11,37 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // 🎯 Main router based on login status
 async function renderApp(user) {
-  if (!user) return renderAuth()
-  document.getElementById('authContainer').textContent = ''
-  document.getElementById('mainContainer').style.display = 'block'
+  if (!user) return renderAuth();
 
-  // Load user profile
-  const { data: profile } = await supabase
+  document.getElementById('authContainer').textContent = '';
+  document.getElementById('mainContainer').style.display = 'block';
+
+  // Lade Profil
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('firstname, lastname, location')
     .eq('id', user.id)
-    .single()
+    .single();
 
-  await renderUserApp(user, profile)
+  if (!profile) {
+    alert("⚠️ Kein Profil vorhanden. Bitte registriere dich erneut oder kontaktiere den Admin.");
+    await supabase.auth.signOut();
+    return location.reload();
+  }
+
+  await renderUserApp(user, profile);
 
   const { data: roleData } = await supabase
     .from('user_roles')
     .select('role')
     .eq('id', user.id)
-    .single()
+    .single();
 
   if (roleData?.role === 'admin') {
-    document.getElementById('adminApp').style.display = 'block'
-    renderAdminApp()
+    document.getElementById('adminApp').style.display = 'block';
+    renderAdminApp();
   } else {
-    document.getElementById('adminApp').style.display = 'none'
+    document.getElementById('adminApp').style.display = 'none';
   }
 }
 
