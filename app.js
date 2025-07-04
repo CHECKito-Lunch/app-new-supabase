@@ -317,3 +317,11 @@ async function showOverview() {
     data.map(o=>`<li>${o.weekday}: ${o.menu||'-'} (${o.status})</li>`).join('')
   }</ul>`
 }
+window.renderMenus    = renderMenus;
+window.submitOrder    = submitOrder;
+window.showOverview   = showOverview;
+window.toggleView     = toggleView;
+window.signin         = signin;
+window.signup         = signup;
+window.resetPassword  = resetPassword;
+window.toggleUserView = toggleUserView; // wenn genutzt
