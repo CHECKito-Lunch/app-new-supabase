@@ -11,16 +11,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // App-Rendering je nach Status
 async function renderApp(user) {
-  if (!user) return renderAuth()
-  document.getElementById('authContainer').textContent = ''
-  document.getElementById('mainContainer').style.display = 'block'
+  if (!user) return renderAuth();
+  document.getElementById('authContainer').innerHTML = '';
+  document.getElementById('mainContainer').style.display = 'block';
 
-  await renderUserApp(user)
-  if (user.email === 'admin@example.com') {
-    document.getElementById('adminApp').style.display = 'block'
-    renderAdminApp()
+  await renderUserApp(user);
+
+  const { data: roleData } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (roleData?.role === 'admin') {
+    document.getElementById('adminApp').style.display = 'block';
+    renderAdminApp();
   } else {
-    document.getElementById('adminApp').style.display = 'none'
+    document.getElementById('adminApp').style.display = 'none';
   }
 }
 
@@ -151,6 +158,42 @@ window.exportOrders = async () => {
   const blob = new Blob([data], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   document.getElementById('exportLink').innerHTML = `<a href="${url}" download="orders.csv">Download CSV</a>`
+}
+//Admin: Rolleneditor hinzufügen
+
+document.getElementById('adminAppInner').innerHTML += `
+  <hr>
+  <h3>🔧 Rollen verwalten</h3>
+  <div id="rolesManager"></div>
+`
+renderRoleManager()
+
+async function renderRoleManager() {
+  const { data: users, error } = await supabase.from('user_roles').select('id, role')
+  if (error) return console.error('Fehler beim Laden der Rollen:', error)
+
+  const tbody = users.map(u => `
+    <tr>
+      <td>${u.id}</td>
+      <td>
+        <select onchange="updateUserRole('${u.id}', this.value)">
+          <option value="user" ${u.role === 'user' ? 'selected' : ''}>user</option>
+          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
+        </select>
+      </td>
+    </tr>`).join('')
+
+  document.getElementById('rolesManager').innerHTML = `
+    <table><tr><th>User-ID</th><th>Rolle</th></tr>${tbody}</table>
+  `
+}
+window.updateUserRole = async (userId, newRole) => {
+  const { error } = await supabase.from('user_roles').upsert({
+    id: userId,
+    role: newRole
+  })
+  if (error) return alert('Fehler beim Speichern: ' + error.message)
+  alert('Rolle aktualisiert ✅')
 }
 
 // Menüanzeige für Nutzer mit Fristen
