@@ -112,6 +112,8 @@ async function renderUserApp(user, profile) {
 // — Adminansicht
 function renderAdminApp() {
   document.getElementById('adminAppInner').innerHTML = `
+   <button id="toggleViewBtn" onclick="toggleView()">🔄 Zur Benutzeransicht</button>
+  <h3>🛠️ Menüs & Fristen verwalten</h3>
     <h3>🛠️ Menüs verwalten</h3>
     <div>KW: <input id="menuWeek" type="number" min="1" max="52" value="28"></div>
     <div id="menuEditor"></div>
@@ -241,3 +243,21 @@ window.toggleUserView = () => {
   document.getElementById('adminApp').style.display = 'none'
   document.getElementById('userApp').scrollIntoView({ behavior: 'smooth' })
 }
+
+// 🔁 Zwei-Wege-Toggle zwischen Admin- und Benutzeransicht
+window.toggleView = () => {
+  const userApp = document.getElementById('userApp')
+  const adminApp = document.getElementById('adminApp')
+  const toggleBtn = document.getElementById('toggleViewBtn')
+
+  if (adminApp.style.display === 'none') {
+    adminApp.style.display = 'block'
+    toggleBtn.textContent = '🔄 Zur Benutzeransicht'
+    userApp.scrollIntoView({ behavior: 'smooth' })
+  } else {
+    adminApp.style.display = 'none'
+    toggleBtn.textContent = '🔧 Zur Adminansicht'
+    userApp.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
