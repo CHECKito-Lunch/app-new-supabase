@@ -169,6 +169,12 @@ window.updateUserRole = async (uid, nr) => {
   if(error) alert(error.message)
 }
 
+  document.getElementById('adminAppInner').innerHTML += `
+    <hr>
+    <button onclick="toggleUserView()">Zur Benutzeransicht wechseln</button>`
+
+// BESTELLUNG USER
+
 async function renderMenus() {
   const week=document.getElementById('weekSelect').value
   const { data: mdata } = await supabase.from('menus').select('*').eq('week',week)
@@ -227,4 +233,11 @@ async function showOverview() {
   const cont=document.getElementById('overview')
   if(!data.length) return cont.innerHTML='<p>Keine Bestellungen</p>'
   cont.innerHTML=`<h3>Meine Bestellungen</h3><ul>${data.map(o=>`<li>${o.weekday}: ${o.menu||'-'} (${o.status})</li>`).join('')}</ul>`
+}
+
+// Bereich umschalten
+
+window.toggleUserView = () => {
+  document.getElementById('adminApp').style.display = 'none'
+  document.getElementById('userApp').scrollIntoView({ behavior: 'smooth' })
 }
