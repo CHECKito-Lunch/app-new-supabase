@@ -2,50 +2,55 @@ import { supabase } from './supabase.js'
 
 const days = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag']
 
-// ☀️ Initialization: check session and monitor auth state
+// ☀️ Initialization
 document.addEventListener('DOMContentLoaded', async () => {
   const { data: { session } } = await supabase.auth.getSession()
   supabase.auth.onAuthStateChange((_, s) => renderApp(s?.user))
   renderApp(session?.user)
 })
 
-// 🎯 Main router based on login status
+// 🎯 Main router
 async function renderApp(user) {
-  if (!user) return renderAuth();
+  if (!user) return renderAuth()
 
-  document.getElementById('authContainer').textContent = '';
-  document.getElementById('mainContainer').style.display = 'block';
+  document.getElementById('authContainer').textContent = ''
+  document.getElementById('mainContainer').style.display = 'block'
 
-  // Lade Profil
-  const { data: profile, error } = await supabase
+  // 📥 Load user profile
+  const { data: profile, error: profErr } = await supabase
     .from('profiles')
     .select('firstname, lastname, location')
     .eq('id', user.id)
-    .single();
+    .single()
 
-  if (!profile) {
-    alert("⚠️ Kein Profil vorhanden. Bitte registriere dich erneut oder kontaktiere den Admin.");
-    await supabase.auth.signOut();
-    return location.reload();
+  if (profErr || !profile) {
+    alert("⚠️ Profil fehlt oder Fehler beim Laden. Bitte neu registrieren oder Admin informieren.")
+    await supabase.auth.signOut()
+    location.reload()
+    return
   }
 
-  await renderUserApp(user, profile);
+  await renderUserApp(user, profile)
 
-  const { data: roleData } = await supabase
+  // 🔍 Load user role
+  const { data: roleData, error: roleErr } = await supabase
     .from('user_roles')
     .select('role')
     .eq('id', user.id)
-    .single();
+    .single()
 
+  console.log("🔐 Role check:", { roleData, roleErr })
+
+  const adminEl = document.getElementById('adminApp')
   if (roleData?.role === 'admin') {
-    document.getElementById('adminApp').style.display = 'block';
-    renderAdminApp();
+    adminEl.style.display = 'block'
+    renderAdminApp()
   } else {
-    document.getElementById('adminApp').style.display = 'none';
+    adminEl.style.display = 'none'
   }
 }
 
-// 🛂 Authentication UI: login, switch to register, reset
+// 🛂 Authentication UI
 function renderAuth() {
   document.getElementById('authContainer').innerHTML = `
     <h2>Login / Registrierung</h2>
@@ -57,6 +62,14 @@ function renderAuth() {
       <p><a href="#" onclick="resetPassword()">Passwort vergessen?</a></p>
       <div id="msg"></div>
     </div>`
+}
+
+window.signin = async () => {
+  const e = document.getElementById('email').value
+  const p = document.getElementById('password').value
+  const { error } = await supabase.auth.signInWithPassword({ email: e, password: p })
+  const msg = document.getElementById('msg')
+  if (msg) msg.textContent = error ? error.message : 'Erfolgreich eingeloggt!'
 }
 
 window.showRegister = () => {
@@ -78,29 +91,22 @@ window.showRegister = () => {
     <div id="msg"></div>`
 }
 
-window.signin = async () => {
-  const e = document.getElementById('email').value
-  const p = document.getElementById('password').value
-  const { error } = await supabase.auth.signInWithPassword({ email: e, password: p })
-  document.getElementById('msg').textContent = error ? error.message : 'Erfolgreich eingeloggt!'
-}
-
 window.signup = async () => {
   const firstname = document.getElementById('firstname').value.trim()
   const lastname = document.getElementById('lastname').value.trim()
   const email = document.getElementById('email').value.trim()
   const password = document.getElementById('password').value.trim()
   const location = document.getElementById('regLocation').value
-
   if (!firstname || !lastname || !email || !password || !location) {
     return alert('Bitte alle Felder ausfüllen!')
   }
-
   const { data, error } = await supabase.auth.signUp({ email, password })
   if (error) return alert(error.message)
-
-  await supabase.from('profiles').insert({ id: data.user.id, firstname, lastname, location })
-  alert('Registriert! Bitte bestätige Email.')
+  await supabase.from('profiles').insert({
+    id: data.user.id,
+    firstname, lastname, location
+  })
+  alert('Registriert! Bitte bestätige deine Email.')
   renderAuth()
 }
 
@@ -116,7 +122,7 @@ window.signOut = async () => {
   location.reload()
 }
 
-// 👤 Render user panel: name readonly + editable location
+// 👤 Render user panel
 async function renderUserApp(user, profile) {
   const name = `${profile.firstname} ${profile.lastname}`
   document.getElementById('userApp').innerHTML = `
@@ -140,7 +146,6 @@ async function renderUserApp(user, profile) {
     <div id="menusContainer"></div>
     <button onclick="submitOrder()">Bestellung absenden / ändern</button>
     <div id="overview"></div>`
-
   const sel = document.getElementById('weekSelect')
   for (let i = 1; i <= 52; i++) sel.append(new Option('KW ' + i, i))
 }
