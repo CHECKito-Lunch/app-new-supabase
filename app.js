@@ -17,15 +17,16 @@ async function renderApp(user) {
   const { data: profile, error: profErr } = await supabase
     .from('profiles').select('firstname,lastname,location').eq('id', user.id).single()
   if (profErr || !profile) {
-    alert("⚠️ Profil fehlt oder ungültig. Bitte neu anmelden.")
-    await supabase.auth.signOut(); return location.reload()
+    alert("⚠️ Profil fehlt oder ungültig. Bitte einloggen.")
+    await supabase.auth.signOut()
+    return location.reload()
   }
 
   await renderUserApp(user, profile)
 
-  const { data: roleData } = await supabase
+  const { data: roleData, error: roleErr } = await supabase
     .from('user_roles').select('role').eq('id', user.id).single()
-  console.log("🔐 Role check:", roleData)
+  console.log("🔐 Role check:", roleData, roleErr)
 
   const adminEl = document.getElementById('adminApp')
   if (roleData?.role === 'admin') {
@@ -44,7 +45,10 @@ function renderAuth() {
       <div><input id="email" type="email" placeholder="Email"></div>
       <div><input id="password" type="password" placeholder="Passwort"></div>
       <button onclick="signin()">Login</button>
-      <p><a href="#" onclick="showRegister()">Registrieren</a> | <a href="#" onclick="resetPassword()">Passwort vergessen?</a></p>
+      <p>
+        <a href="#" onclick="showRegister()">Registrieren</a> |
+        <a href="#" onclick="resetPassword()">Passwort vergessen?</a>
+      </p>
       <div id="msg"></div>
     </div>`
 }
@@ -53,7 +57,8 @@ window.signin = async () => {
   const e = document.getElementById('email').value
   const p = document.getElementById('password').value
   const { error } = await supabase.auth.signInWithPassword({ email:e, password:p })
-  const msg = document.getElementById('msg'); if (msg) msg.textContent = error ? error.message : 'Erfolgreich eingeloggt!'
+  const msg = document.getElementById('msg')
+  if (msg) msg.textContent = error ? error.message : 'Erfolgreich eingeloggt!'
 }
 
 window.showRegister = () => {
@@ -63,7 +68,10 @@ window.showRegister = () => {
     <div><input id="lastname" placeholder="Nachname"></div>
     <div><input id="email" type="email" placeholder="Email"></div>
     <div><input id="password" type="password" placeholder="Passwort"></div>
-    <div><select id="regLocation"><option value="">Standort wählen</option><option>Südpol</option><option>Nordpol</option></select></div>
+    <div><select id="regLocation">
+      <option value="">Standort wählen</option>
+      <option>Südpol</option><option>Nordpol</option>
+    </select></div>
     <button onclick="signup()">Registrieren</button>
     <p><a href="#" onclick="renderAuth()">Zurück zum Login</a></p>
     <div id="msg"></div>`
@@ -101,24 +109,34 @@ async function renderUserApp(user, profile) {
   document.getElementById('userApp').innerHTML = `
     <h3>Hallo, ${profile.firstname}!</h3>
     <div><label>Name:</label><input id="nameInput" value="${name}" disabled></div>
-    <div><label>Standort:</label><select id="locationSelect"><option${profile.location==='Südpol'?' selected':''}>Südpol</option><option${profile.location==='Nordpol'?' selected':''}>Nordpol</option></select></div>
-    <div><label>Woche:</label><select id="weekSelect"></select><button onclick="renderMenus()">Laden</button></div>
-    <div id="menusContainer"></div><button onclick="submitOrder()">Bestellung absenden/ändern</button><div id="overview"></div>
+    <div><label>Standort:</label><select id="locationSelect">
+      <option${profile.location==='Südpol'?' selected':''}>Südpol</option>
+      <option${profile.location==='Nordpol'?' selected':''}>Nordpol</option>
+    </select></div>
+    <div><label>Woche:</label><select id="weekSelect"></select>
+      <button onclick="renderMenus()">Laden</button>
+    </div>
+    <div id="menusContainer"></div>
+    <button onclick="submitOrder()">Bestellung absenden/ändern</button>
+    <div id="overview"></div>
   `
-  const sel=document.getElementById('weekSelect')
-  for (let i=1;i<=52;i++) sel.append(new Option('KW '+i,i))
+  const sel = document.getElementById('weekSelect')
+  for (let i=1; i<=52; i++) sel.append(new Option('KW '+i, i))
 }
 
 // — Adminansicht
 function renderAdminApp() {
   document.getElementById('adminAppInner').innerHTML = `
-   <button id="toggleViewBtn" onclick="toggleView()">🔄 Zur Benutzeransicht</button>
-  <h3>🛠️ Menüs & Fristen verwalten</h3>
-    <h3>🛠️ Menüs verwalten</h3>
-    <div>KW: <input id="menuWeek" type="number" min="1" max="52" value="28"></div>
+    <button id="toggleViewBtn" onclick="toggleView()">🔄 Zur Benutzeransicht</button>
+    <h3>🛠️ Menüs & Fristen verwalten</h3>
+    <div>KW: <input id="menuWeek" type="number" min="1" max="52" value="1"></div>
     <div id="menuEditor"></div>
     <button onclick="renderMenuEditor()">Editor aktualisieren</button>
-    <hr><button onclick="exportOrders()">CSV-Export</button><div id="exportLink"></div><div id="adminOrders"></div><div id="rolesManager"></div>`
+    <hr>
+    <button onclick="exportOrders()">📋 CSV-Export</button>
+    <div id="exportLink"></div>
+    <div id="adminOrders"></div>
+    <div id="rolesManager"></div>`
   renderMenuEditor()
   renderAdminOrders()
   renderRoleManager()
@@ -126,138 +144,176 @@ function renderAdminApp() {
 
 window.renderMenuEditor = async () => {
   const week = document.getElementById('menuWeek').value
-  const { data: allM } = await supabase.from('menus').select('*').eq('week',week)
+  const { data: allM } = await supabase.from('menus').select('*').eq('week', week)
   const map = {}
-  allM.forEach(m=>{ if(!map[m.weekday]) map[m.weekday]=[]; map[m.weekday].push(m) })
-  document.getElementById('menuEditor').innerHTML = days.map(day=>{
-    const rows=(map[day]||[]).map((m,i)=>menuRow(day,m,i)).join('')
-    return `<div><h4>${day}</h4><div id="menuList_${day}">${rows}</div><button onclick="addMenuRow('${day}')">➕ Menü hinzufügen</button></div>`
-  }).join('')
+  allM.forEach(m => { if (!map[m.weekday]) map[m.weekday] = []; map[m.weekday].push(m) })
+  document.getElementById('menuEditor').innerHTML = days.map(day => `
+    <div><h4>${day}</h4><div id="menuList_${day}">
+      ${(map[day]||[]).map((m,i) => menuRow(day,m)).join('')}
+    </div>
+    <button onclick="addMenuRow('${day}')">➕ Menü hinzufügen</button></div>
+  `).join('')
 }
 
-function menuRow(day,m={},idx) {
-  const valDL = m.deadline ? new Date(m.deadline).toISOString().slice(0,16) : ''
-  return `<div data-day="${day}"><input class="menu-label" placeholder="Label" value="${m.menu_label||''}"><input class="menu-name" placeholder="Name" value="${m.menu_name||''}"><input class="menu-deadline" type="datetime-local" value="${valDL}"><button onclick="saveSingleMenu(this,'${day}','${m.id||''}')">💾</button>${m.id?`<button onclick="deleteMenu('${m.id}')">❌</button>`:''}</div>`
+function menuRow(day, m={}) {
+  const id = m.id || ''
+  const dl = m.deadline ? new Date(m.deadline).toISOString().slice(0,16) : ''
+  return `<div data-day="${day}" data-id="${id}">
+    <input class="menu-label" placeholder="Label" value="${m.menu_label||''}">
+    <input class="menu-name" placeholder="Name" value="${m.menu_name||''}">
+    <input class="menu-deadline" type="datetime-local" value="${dl}">
+    <button onclick="saveSingleMenu(this,'${day}','${id}')">💾</button>
+    ${id ? `<button onclick="deleteMenu('${id}')">❌</button>` : ''}
+  </div>`
 }
 
 window.addMenuRow = day => {
-  document.getElementById(`menuList_${day}`).insertAdjacentHTML('beforeend', menuRow(day))
+  document.getElementById(`menuList_${day}`)
+    .insertAdjacentHTML('beforeend', menuRow(day))
 }
 
-window.saveSingleMenu = async (b,day,id) => {
+window.saveSingleMenu = async (b, day, id) => {
   const r = b.closest('div[data-day]')
-  const week=document.getElementById('menuWeek').value, label=r.querySelector('.menu-label').value, name=r.querySelector('.menu-name').value, dl=r.querySelector('.menu-deadline').value
-  const { error } = await supabase.from('menus').upsert({ id:id||undefined, week, weekday:day, menu_label:label, menu_name:name, deadline:dl?new Date(dl).toISOString():null })
-  if(error) return alert('Fehler: '+error.message)
+  const week = document.getElementById('menuWeek').value
+  const label = r.querySelector('.menu-label').value.trim()
+  const name = r.querySelector('.menu-name').value.trim()
+  const dl = r.querySelector('.menu-deadline').value
+  const { error } = await supabase.from('menus').upsert({
+    id: id || undefined, week, weekday: day,
+    menu_label: label, menu_name: name,
+    deadline: dl ? new Date(dl).toISOString() : null
+  })
+  if (error) return alert('Fehler: ' + error.message)
   renderMenuEditor()
 }
 
 window.deleteMenu = async id => {
-  if(confirm('Löschen?')) { const { error } = await supabase.from('menus').delete().eq('id',id); if(error) alert(error.message); renderMenuEditor() }
+  if (!confirm('Löschen?')) return
+  const { error } = await supabase.from('menus').delete().eq('id', id)
+  if (error) alert(error.message)
+  renderMenuEditor()
 }
 
 async function renderAdminOrders() {
   const { data } = await supabase.from('orders').select('*').order('week')
-  document.getElementById('adminOrders').innerHTML = `<table><tr><th>User</th><th>KW</th><th>Ort</th><th>Tag</th><th>Menü</th></tr>` + data.map(o=>`<tr><td>${o.name}</td><td>${o.week}</td><td>${o.location}</td><td>${o.weekday}</td><td>${o.menu||'-'}</td></tr>`).join('') + `</table>`
+  document.getElementById('adminOrders').innerHTML = `
+    <table><tr><th>User</th><th>KW</th><th>Ort</th><th>Tag</th><th>Menü</th></tr>
+    ${data.map(o => `<tr>
+      <td>${o.name}</td><td>${o.week}</td><td>${o.location}</td>
+      <td>${o.weekday}</td><td>${o.menu||'-'}</td></tr>`).join('')}
+    </table>`
 }
 
 async function renderRoleManager() {
-  const { data: users } = await supabase.from('user_roles_with_email').select('id,email,role')
-  document.getElementById('rolesManager').innerHTML = `<h3>🔧 Rollen</h3><table>${users.map(u=>`<tr><td>${u.email}</td><td><select onchange="updateUserRole('${u.id}',this.value)"><option value="user"${u.role==='user'?' selected':''}>user</option><option value="admin"${u.role==='admin'?' selected':''}>admin</option></select></td></tr>`).join('')}</table>`
+  const { data: users, error } = await supabase
+    .from('user_roles_with_email').select('id,email,role')
+  const container = document.getElementById('rolesManager')
+  if (error || !Array.isArray(users)) {
+    container.innerHTML = '<p>Fehler beim Laden der Rollen.</p>'
+    return
+  }
+  container.innerHTML = `
+    <h3>🔧 Rollenverwaltung</h3>
+    <table><tr><th>Email</th><th>Rolle</th></tr>
+    ${users.map(u => `<tr>
+      <td>${u.email}</td>
+      <td>
+        <select onchange="updateUserRole('${u.id}', this.value)">
+          <option value="user"${u.role==='user'?' selected':''}>user</option>
+          <option value="admin"${u.role==='admin'?' selected':''}>admin</option>
+        </select>
+      </td>
+    </tr>`).join('')}
+    </table>`
 }
 
 window.updateUserRole = async (uid, nr) => {
   const { error } = await supabase.from('user_roles').upsert({ id:uid, role:nr })
-  if(error) alert(error.message)
+  if (error) alert(error.message)
 }
 
-  document.getElementById('adminAppInner').innerHTML += `
-    <hr>
-    <button onclick="toggleUserView()">Zur Benutzeransicht wechseln</button>`
+window.toggleView = () => {
+  const adminApp = document.getElementById('adminApp')
+  const btn = document.getElementById('toggleViewBtn')
+  const isHidden = adminApp.style.display === 'none'
+  adminApp.style.display = isHidden ? 'block' : 'none'
+  btn.textContent = isHidden ? '🔄 Zur Benutzeransicht' : '🔧 Zur Adminansicht'
+  document.getElementById(isHidden ? 'adminApp' : 'userApp')
+    .scrollIntoView({ behavior: 'smooth' })
+}
 
-// BESTELLUNG USER
-
+// — Nutzer-Bestellungen
 async function renderMenus() {
-  const week=document.getElementById('weekSelect').value
-  const { data: mdata } = await supabase.from('menus').select('*').eq('week',week)
+  const week = document.getElementById('weekSelect').value
+  const { data: mdata } = await supabase.from('menus').select('*').eq('week', week)
   const map = {}
-  mdata.forEach(m=>{ if(!map[m.weekday]) map[m.weekday]=[]; map[m.weekday].push(m) })
-  const cont=document.getElementById('menusContainer')
-  cont.innerHTML=''
-  days.forEach(day=>{
-    const sec=document.createElement('div'); sec.className='menu-section'; sec.innerHTML=`<h4>${day}</h4>`
-    (map[day]||[]).forEach(m=>{
-      const expired = m.deadline && Date.now()>new Date(m.deadline).getTime()
-      const r=document.createElement('input'); r.type='radio'; r.name=day; r.value=m.menu_name; r.disabled=expired; r.id=`${day}_${m.id}`
-      const l=document.createElement('label'); l.htmlFor=r.id; l.textContent=m.menu_name
-      sec.append(r,l)
+  mdata.forEach(m => { map[m.weekday] = map[m.weekday] || []; map[m.weekday].push(m) })
+  const cont = document.getElementById('menusContainer')
+  cont.innerHTML = ''
+
+  days.forEach(day => {
+    const sec = document.createElement('div')
+    sec.className = 'menu-section'
+    sec.innerHTML = `<h4>${day}</h4>`
+    ;(map[day]||[]).forEach(m => {
+      const expired = m.deadline && Date.now() > new Date(m.deadline).getTime()
+      const r = document.createElement('input')
+      r.type = 'radio'; r.name = day; r.value = m.menu_name; r.disabled = expired; r.id = `${day}_${m.id}`
+      const l = document.createElement('label')
+      l.htmlFor = r.id; l.textContent = m.menu_name
+      sec.append(r, l)
     })
-    const rr=document.createElement('input'); rr.type='radio'; rr.name=day; rr.value='__KEINESSEN__'; rr.id=`${day}_none`
-    const ll=document.createElement('label'); ll.htmlFor=rr.id; ll.textContent='Kein Essen'
-    sec.append(rr,ll)
+    const rr = document.createElement('input')
+    rr.type = 'radio'; rr.name = day; rr.value = '__KEINESSEN__'; rr.id = `${day}_none`
+    const ll = document.createElement('label')
+    ll.htmlFor = rr.id; ll.textContent = 'Kein Essen'
+    sec.append(rr, ll)
     cont.appendChild(sec)
   })
-  setTimeout(loadPreviousSelections,50)
+  setTimeout(loadPreviousSelections, 50)
 }
 
 async function loadPreviousSelections() {
-  const name=document.getElementById('nameInput').value, week=document.getElementById('weekSelect').value
-  if(!name||!week) return
+  const name = document.getElementById('nameInput').value
+  const week = document.getElementById('weekSelect').value
+  if (!name||!week) return
   const { data } = await supabase.from('orders').select('weekday,menu').eq('name',name).eq('week',week)
-  data.forEach(o=>{
-    const val=o.menu||'__KEINESSEN__'
-    const btn=document.querySelector(`input[name="${o.weekday}"][value="${val}"]`)
-    if(btn) btn.checked=true
+  data.forEach(o => {
+    const val = o.menu || '__KEINESSEN__'
+    const btn = document.querySelector(`input[name="${o.weekday}"][value="${val}"]`)
+    if (btn) btn.checked = true
   })
 }
 
 async function submitOrder() {
-  const name=document.getElementById('nameInput').value, week=document.getElementById('weekSelect').value, location=document.getElementById('locationSelect').value
-  if(!name||!week||!location) return alert('Bitte alles ausfüllen!')
-  const { data: mdata } = await supabase.from('menus').select('*').eq('week',week)
-  const map = {}; mdata.forEach(m=>{ if(!map[m.weekday]) map[m.weekday]=[]; map[m.weekday].push(m) })
-  for(let day of days){
-    const btn=document.querySelector(`input[name="${day}"]:checked`)
-    const expired = map[day]?.find(m=>m.menu_name===btn?.value)?.deadline && Date.now()>new Date(map[day].find(m=>m.menu_name===btn.value).deadline).getTime()
-    if(!btn||expired) continue
-    const menu=btn.value==='__KEINESSEN__'?'':btn.value
-    const status = menu?'bestellt':'abbestellt'
-    await supabase.from('orders').upsert({ name, week, location, weekday:day, menu, status }, { onConflict:['name','week','location','weekday'] })
+  const name = document.getElementById('nameInput').value
+  const week = document.getElementById('weekSelect').value
+  const location = document.getElementById('locationSelect').value
+  if (!name||!week||!location) return alert('Bitte alles ausfüllen!')
+  const { data: mdata } = await supabase.from('menus').select('*').eq('week', week)
+  const map = {}; mdata.forEach(m=>{ map[m.weekday]=map[m.weekday]||[]; map[m.weekday].push(m) })
+  for (let day of days) {
+    const btn = document.querySelector(`input[name="${day}"]:checked`)
+    const expired = map[day]?.find(m=>m.menu_name===btn?.value)?.deadline && Date.now() > new Date(map[day].find(m=>m.menu_name===btn.value).deadline).getTime()
+    if (!btn || expired) continue
+    const menu = btn.value==='__KEINESSEN__' ? '' : btn.value
+    const status = menu ? 'bestellt' : 'abbestellt'
+    await supabase.from('orders').upsert({
+      name, week, location, weekday:day, menu, status
+    }, { onConflict:['name','week','location','weekday'] })
   }
   alert('Bestellung gespeichert!')
   showOverview()
 }
 
 async function showOverview() {
-  const name=document.getElementById('nameInput').value, week=document.getElementById('weekSelect').value
-  if(!name||!week) return
+  const name = document.getElementById('nameInput').value
+  const week = document.getElementById('weekSelect').value
+  if (!name || !week) return
   const { data } = await supabase.from('orders').select('weekday,menu,status').eq('name',name).eq('week',week)
-  const cont=document.getElementById('overview')
-  if(!data.length) return cont.innerHTML='<p>Keine Bestellungen</p>'
-  cont.innerHTML=`<h3>Meine Bestellungen</h3><ul>${data.map(o=>`<li>${o.weekday}: ${o.menu||'-'} (${o.status})</li>`).join('')}</ul>`
+  const cont = document.getElementById('overview')
+  if (!data.length) return cont.innerHTML = '<p>Keine Bestellungen</p>'
+  cont.innerHTML = `<h3>Meine Bestellungen</h3><ul>${
+    data.map(o=>`<li>${o.weekday}: ${o.menu||'-'} (${o.status})</li>`).join('')
+  }</ul>`
 }
-
-// Bereich umschalten
-
-window.toggleUserView = () => {
-  document.getElementById('adminApp').style.display = 'none'
-  document.getElementById('userApp').scrollIntoView({ behavior: 'smooth' })
-}
-
-// 🔁 Zwei-Wege-Toggle zwischen Admin- und Benutzeransicht
-window.toggleView = () => {
-  const userApp = document.getElementById('userApp')
-  const adminApp = document.getElementById('adminApp')
-  const toggleBtn = document.getElementById('toggleViewBtn')
-
-  if (adminApp.style.display === 'none') {
-    adminApp.style.display = 'block'
-    toggleBtn.textContent = '🔄 Zur Benutzeransicht'
-    userApp.scrollIntoView({ behavior: 'smooth' })
-  } else {
-    adminApp.style.display = 'none'
-    toggleBtn.textContent = '🔧 Zur Adminansicht'
-    userApp.scrollIntoView({ behavior: 'smooth' })
-  }
-}
-
