@@ -44,20 +44,21 @@ async function renderApp(user) {
   }
 }
 
-// ——  🛂 Auth UI ———————————————————————
+// 🔐 AUTH UI
 function renderAuth() {
   document.getElementById('authContainer').innerHTML = `
     <h2>Login / Registrierung</h2>
     <div id="authMode">
-      <div><input id="email" type="email" placeholder="Email"></div>
-      <div><input id="password" type="password" placeholder="Passwort"></div>
-      <button onclick="signin()">Login</button>
-      <p><a href="#" onclick="showRegister()">Registrieren</a> | <a href="#" onclick="resetPassword()">Passwort vergessen?</a></p>
+      <div class="form-group"><input id="email" type="email" placeholder="Email"></div>
+      <div class="form-group"><input id="password" type="password" placeholder="Passwort"></div>
+      <div class="form-group"><button onclick="signin()">Login</button></div>
+      <p>Noch kein Konto? <a href="#" onclick="showRegister()">Registrieren</a></p>
+      <p><a href="#" onclick="resetPassword()">Passwort vergessen?</a></p>
       <div id="msg"></div>
     </div>`
 }
 
-async function signin() {
+window.signin = async () => {
   const e = document.getElementById('email').value
   const p = document.getElementById('password').value
   const { error } = await supabase.auth.signInWithPassword({ email: e, password: p })
@@ -65,14 +66,14 @@ async function signin() {
   if (msg) msg.textContent = error ? error.message : 'Erfolgreich eingeloggt!'
 }
 
-function showRegister() {
+window.showRegister = () => {
   document.getElementById('authContainer').innerHTML = `
     <h2>Registrierung</h2>
-    <div><input id="firstname" placeholder="Vorname"></div>
-    <div><input id="lastname" placeholder="Nachname"></div>
-    <div><input id="email" type="email" placeholder="Email"></div>
-    <div><input id="password" type="password" placeholder="Passwort"></div>
-    <div>
+    <div class="form-group"><input id="firstname" placeholder="Vorname"></div>
+    <div class="form-group"><input id="lastname" placeholder="Nachname"></div>
+    <div class="form-group"><input id="email" type="email" placeholder="Email"></div>
+    <div class="form-group"><input id="password" type="password" placeholder="Passwort"></div>
+    <div class="form-group">
       <select id="regLocation">
         <option value="">Standort wählen</option>
         <option>Südpol</option>
@@ -84,32 +85,46 @@ function showRegister() {
     <div id="msg"></div>`
 }
 
-async function signup() {
-  const fn = document.getElementById('firstname').value.trim()
-  const ln = document.getElementById('lastname').value.trim()
-  const em = document.getElementById('email').value.trim()
-  const pw = document.getElementById('password').value.trim()
-  const loc = document.getElementById('regLocation').value
-  if (!fn||!ln||!em||!pw||!loc) return alert('Bitte alle Felder ausfüllen!')
-  const { data, error } = await supabase.auth.signUp({ email: em, password: pw })
+window.signup = async () => {
+  const firstname = document.getElementById('firstname').value.trim()
+  const lastname = document.getElementById('lastname').value.trim()
+  const email = document.getElementById('email').value.trim()
+  const password = document.getElementById('password').value.trim()
+  const location = document.getElementById('regLocation').value
+  if (!firstname || !lastname || !email || !password || !location) {
+    return alert('Bitte alle Felder ausfüllen!')
+  }
+
+  const { data, error } = await supabase.auth.signUp({ email, password })
   if (error) return alert(error.message)
-  await supabase.from('profiles').insert({ id: data.user.id, firstname: fn, lastname: ln, location: loc })
-  alert('Registriert! Bitte bestätige Deine E‑Mail.')
+
+  // Profil erstellen
+  await supabase.from('profiles').insert({
+    id: data.user.id,
+    firstname, lastname, location
+  })
+
+  // Rolle als user setzen (optional, wenn auto-insert nicht aktiv ist)
+  await supabase.from('user_roles').upsert({
+    id: data.user.id,
+    role: 'user'
+  })
+
+  alert('Registriert! Bitte bestätige deine Email.')
   renderAuth()
 }
 
-async function resetPassword() {
-  const em = prompt('Bitte gib Deine E‑Mail ein:')
-  if (!em) return
-  const { error } = await supabase.auth.resetPasswordForEmail(em)
-  alert(error ? error.message : 'Link zum Zurücksetzen gesendet!')
+window.resetPassword = async () => {
+  const email = prompt('Bitte gib deine Email ein:')
+  if (!email) return
+  const { error } = await supabase.auth.resetPasswordForEmail(email)
+  alert(error ? error.message : 'Passwort-Zurücksetzen-Mail gesendet!')
 }
 
-async function signOut() {
+window.signOut = async () => {
   await supabase.auth.signOut()
   location.reload()
 }
-
 // ——  👤 Nutzeransicht —————————————————————
 async function renderUserApp(user, profile) {
   const name = `${profile.firstname} ${profile.lastname}`
