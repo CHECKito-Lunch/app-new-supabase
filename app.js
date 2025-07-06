@@ -1,32 +1,39 @@
 import { supabase } from './supabase.js'
+
 const days = ['Montag','Dienstag','Mittwoch','Donnerstag','Freitag']
 
-// ☀️ Initialization
+// ——  ☀️ Initialization ——————————————————————
 document.addEventListener('DOMContentLoaded', async () => {
   const { data:{ session } } = await supabase.auth.getSession()
   supabase.auth.onAuthStateChange((_, s) => renderApp(s?.user))
   renderApp(session?.user)
 })
 
-// ––– Main router
+// ——  🎯 Main router ————————————————————————
 async function renderApp(user) {
   if (!user) return renderAuth()
   document.getElementById('authContainer').textContent = ''
   document.getElementById('mainContainer').style.display = 'block'
 
+  // 🎫 Profile laden
   const { data: profile, error: profErr } = await supabase
-    .from('profiles').select('firstname,lastname,location').eq('id', user.id).single()
+    .from('profiles')
+    .select('firstname,lastname,location')
+    .eq('id', user.id).single()
   if (profErr || !profile) {
-    alert("⚠️ Profil fehlt oder ungültig. Bitte einloggen.")
+    alert('⚠️ Profil fehlt oder ungültig. Bitte neu anmelden.')
     await supabase.auth.signOut()
     return location.reload()
   }
 
   await renderUserApp(user, profile)
 
-  const { data: roleData, error: roleErr } = await supabase
-    .from('user_roles').select('role').eq('id', user.id).single()
-  console.log("🔐 Role check:", roleData, roleErr)
+  const { data: roleData } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('id', user.id).single()
+
+  console.log('🔐 Role check:', roleData)
 
   const adminEl = document.getElementById('adminApp')
   if (roleData?.role === 'admin') {
@@ -37,7 +44,7 @@ async function renderApp(user) {
   }
 }
 
-// — Auth UI
+// ——  🛂 Auth UI ———————————————————————
 function renderAuth() {
   document.getElementById('authContainer').innerHTML = `
     <h2>Login / Registrierung</h2>
@@ -45,229 +52,221 @@ function renderAuth() {
       <div><input id="email" type="email" placeholder="Email"></div>
       <div><input id="password" type="password" placeholder="Passwort"></div>
       <button onclick="signin()">Login</button>
-      <p>
-        <a href="#" onclick="showRegister()">Registrieren</a> |
-        <a href="#" onclick="resetPassword()">Passwort vergessen?</a>
-      </p>
+      <p><a href="#" onclick="showRegister()">Registrieren</a> | <a href="#" onclick="resetPassword()">Passwort vergessen?</a></p>
       <div id="msg"></div>
     </div>`
 }
 
-window.signin = async () => {
+async function signin() {
   const e = document.getElementById('email').value
   const p = document.getElementById('password').value
-  const { error } = await supabase.auth.signInWithPassword({ email:e, password:p })
+  const { error } = await supabase.auth.signInWithPassword({ email: e, password: p })
   const msg = document.getElementById('msg')
   if (msg) msg.textContent = error ? error.message : 'Erfolgreich eingeloggt!'
 }
 
-window.showRegister = () => {
+function showRegister() {
   document.getElementById('authContainer').innerHTML = `
     <h2>Registrierung</h2>
     <div><input id="firstname" placeholder="Vorname"></div>
     <div><input id="lastname" placeholder="Nachname"></div>
     <div><input id="email" type="email" placeholder="Email"></div>
     <div><input id="password" type="password" placeholder="Passwort"></div>
-    <div><select id="regLocation">
-      <option value="">Standort wählen</option>
-      <option>Südpol</option><option>Nordpol</option>
-    </select></div>
+    <div>
+      <select id="regLocation">
+        <option value="">Standort wählen</option>
+        <option>Südpol</option>
+        <option>Nordpol</option>
+      </select>
+    </div>
     <button onclick="signup()">Registrieren</button>
     <p><a href="#" onclick="renderAuth()">Zurück zum Login</a></p>
     <div id="msg"></div>`
 }
 
-window.signup = async () => {
+async function signup() {
   const fn = document.getElementById('firstname').value.trim()
   const ln = document.getElementById('lastname').value.trim()
   const em = document.getElementById('email').value.trim()
   const pw = document.getElementById('password').value.trim()
   const loc = document.getElementById('regLocation').value
   if (!fn||!ln||!em||!pw||!loc) return alert('Bitte alle Felder ausfüllen!')
-  const { data, error } = await supabase.auth.signUp({ email:em, password:pw })
+  const { data, error } = await supabase.auth.signUp({ email: em, password: pw })
   if (error) return alert(error.message)
-  await supabase.from('profiles').insert({ id:data.user.id, firstname:fn, lastname:ln, location:loc })
+  await supabase.from('profiles').insert({ id: data.user.id, firstname: fn, lastname: ln, location: loc })
   alert('Registriert! Bitte bestätige Deine E‑Mail.')
   renderAuth()
 }
 
-window.resetPassword = async () => {
-  const em = prompt('Bitte gib Deine Email ein:')
+async function resetPassword() {
+  const em = prompt('Bitte gib Deine E‑Mail ein:')
   if (!em) return
   const { error } = await supabase.auth.resetPasswordForEmail(em)
   alert(error ? error.message : 'Link zum Zurücksetzen gesendet!')
 }
 
-window.signOut = async () => {
+async function signOut() {
   await supabase.auth.signOut()
   location.reload()
 }
 
-// — Nutzeransicht
+// ——  👤 Nutzeransicht —————————————————————
 async function renderUserApp(user, profile) {
   const name = `${profile.firstname} ${profile.lastname}`
   document.getElementById('userApp').innerHTML = `
     <h3>Hallo, ${profile.firstname}!</h3>
     <div><label>Name:</label><input id="nameInput" value="${name}" disabled></div>
-    <div><label>Standort:</label><select id="locationSelect">
-      <option${profile.location==='Südpol'?' selected':''}>Südpol</option>
-      <option${profile.location==='Nordpol'?' selected':''}>Nordpol</option>
-    </select></div>
-    <div><label>Woche:</label><select id="weekSelect"></select>
-      <button onclick="renderMenus()">Laden</button>
+    <div><label>Standort:</label>
+      <select id="locationSelect">
+        <option${profile.location==='Südpol' ? ' selected' : ''}>Südpol</option>
+        <option${profile.location==='Nordpol' ? ' selected' : ''}>Nordpol</option>
+      </select>
     </div>
+    <div><label>Woche:</label><select id="weekSelect"></select>
+    <button onclick="renderMenus()">Laden</button></div>
     <div id="menusContainer"></div>
     <button onclick="submitOrder()">Bestellung absenden/ändern</button>
-    <div id="overview"></div>
-  `
+    <div id="overview"></div>`
+
   const sel = document.getElementById('weekSelect')
-  for (let i=1; i<=52; i++) sel.append(new Option('KW '+i, i))
+  for (let i = 1; i <= 52; i++) sel.append(new Option('KW '+i, i))
 }
 
-// — Adminansicht
+// ——  🛠️ Adminansicht —————————————————————
 function renderAdminApp() {
   document.getElementById('adminAppInner').innerHTML = `
     <button id="toggleViewBtn" onclick="toggleView()">🔄 Zur Benutzeransicht</button>
     <h3>🛠️ Menüs & Fristen verwalten</h3>
-    <div>KW: <input id="menuWeek" type="number" min="1" max="52" value="1"></div>
+    <div>KW: <input id="menuWeek" type="number" min="1" max="52"></div>
     <div id="menuEditor"></div>
     <button onclick="renderMenuEditor()">Editor aktualisieren</button>
     <hr>
-    <button onclick="exportOrders()">📋 CSV-Export</button>
+    <button onclick="exportOrders()">CSV-Export</button>
     <div id="exportLink"></div>
     <div id="adminOrders"></div>
     <div id="rolesManager"></div>`
+
   renderMenuEditor()
   renderAdminOrders()
   renderRoleManager()
 }
 
-window.renderMenuEditor = async () => {
+async function renderMenuEditor() {
   const week = document.getElementById('menuWeek').value
   const { data: allM } = await supabase.from('menus').select('*').eq('week', week)
   const map = {}
   allM.forEach(m => { if (!map[m.weekday]) map[m.weekday] = []; map[m.weekday].push(m) })
-  document.getElementById('menuEditor').innerHTML = days.map(day => `
-    <div><h4>${day}</h4><div id="menuList_${day}">
-      ${(map[day]||[]).map((m,i) => menuRow(day,m)).join('')}
-    </div>
-    <button onclick="addMenuRow('${day}')">➕ Menü hinzufügen</button></div>
-  `).join('')
+  document.getElementById('menuEditor').innerHTML = days.map(day => {
+    const rows = (map[day]||[]).map((m,i) => menuRow(day,m,i)).join('')
+    return `<div><h4>${day}</h4><div id="menuList_${day}">${rows}</div>
+      <button onclick="addMenuRow('${day}')">➕ Menü hinzufügen</button></div>`
+  }).join('')
 }
 
-function menuRow(day, m={}) {
-  const id = m.id || ''
-  const dl = m.deadline ? new Date(m.deadline).toISOString().slice(0,16) : ''
-  return `<div data-day="${day}" data-id="${id}">
+function menuRow(day, m={}, idx) {
+  const valDL = m.deadline ? new Date(m.deadline).toISOString().slice(0,16) : ''
+  return `<div data-day="${day}">
     <input class="menu-label" placeholder="Label" value="${m.menu_label||''}">
     <input class="menu-name" placeholder="Name" value="${m.menu_name||''}">
-    <input class="menu-deadline" type="datetime-local" value="${dl}">
-    <button onclick="saveSingleMenu(this,'${day}','${id}')">💾</button>
-    ${id ? `<button onclick="deleteMenu('${id}')">❌</button>` : ''}
+    <input class="menu-deadline" type="datetime-local" value="${valDL}">
+    <button onclick="saveSingleMenu(this,'${day}','${m.id||''}')">💾</button>${m.id?`<button onclick="deleteMenu('${m.id}')">❌</button>`:''}
   </div>`
 }
 
-window.addMenuRow = day => {
-  document.getElementById(`menuList_${day}`)
-    .insertAdjacentHTML('beforeend', menuRow(day))
+function addMenuRow(day) {
+  document.getElementById(`menuList_${day}`).insertAdjacentHTML('beforeend', menuRow(day))
 }
 
-window.saveSingleMenu = async (b, day, id) => {
+async function saveSingleMenu(b, day, id) {
   const r = b.closest('div[data-day]')
   const week = document.getElementById('menuWeek').value
-  const label = r.querySelector('.menu-label').value.trim()
-  const name = r.querySelector('.menu-name').value.trim()
+  const label = r.querySelector('.menu-label').value
+  const name = r.querySelector('.menu-name').value
   const dl = r.querySelector('.menu-deadline').value
   const { error } = await supabase.from('menus').upsert({
-    id: id || undefined, week, weekday: day,
-    menu_label: label, menu_name: name,
+    id: id || undefined,
+    week, weekday: day,
+    menu_label: label,
+    menu_name: name,
     deadline: dl ? new Date(dl).toISOString() : null
   })
-  if (error) return alert('Fehler: ' + error.message)
+  if (error) alert('Fehler: ' + error.message)
   renderMenuEditor()
 }
 
-window.deleteMenu = async id => {
-  if (!confirm('Löschen?')) return
-  const { error } = await supabase.from('menus').delete().eq('id', id)
-  if (error) alert(error.message)
-  renderMenuEditor()
+async function deleteMenu(id) {
+  if (confirm('Löschen?')) {
+    const { error } = await supabase.from('menus').delete().eq('id', id)
+    if (error) alert(error.message)
+    renderMenuEditor()
+  }
 }
 
 async function renderAdminOrders() {
   const { data } = await supabase.from('orders').select('*').order('week')
   document.getElementById('adminOrders').innerHTML = `
-    <table><tr><th>User</th><th>KW</th><th>Ort</th><th>Tag</th><th>Menü</th></tr>
-    ${data.map(o => `<tr>
-      <td>${o.name}</td><td>${o.week}</td><td>${o.location}</td>
-      <td>${o.weekday}</td><td>${o.menu||'-'}</td></tr>`).join('')}
-    </table>`
+    <table><tr><th>User</th><th>KW</th><th>Ort</th><th>Tag</th><th>Menü</th></tr>` +
+    data.map(o=>`<tr><td>${o.name}</td><td>${o.week}</td><td>${o.location}</td><td>${o.weekday}</td><td>${o.menu||'-'}</td></tr>`).join('') +
+    `</table>`
 }
 
 async function renderRoleManager() {
-  const { data: users, error } = await supabase
-    .from('user_roles_with_email').select('id,email,role')
-  const container = document.getElementById('rolesManager')
-  if (error || !Array.isArray(users)) {
-    container.innerHTML = '<p>Fehler beim Laden der Rollen.</p>'
-    return
-  }
-  container.innerHTML = `
-    <h3>🔧 Rollenverwaltung</h3>
-    <table><tr><th>Email</th><th>Rolle</th></tr>
-    ${users.map(u => `<tr>
-      <td>${u.email}</td>
+  const { data: users } = await supabase.from('user_roles_with_email').select('id,email,role')
+  document.getElementById('rolesManager').innerHTML = `
+    <h3>🔧 Rollen</h3>
+    <table>` +
+    users.map(u=>`
+      <tr><td>${u.email}</td>
       <td>
-        <select onchange="updateUserRole('${u.id}', this.value)">
+        <select onchange="updateUserRole('${u.id}',this.value)">
           <option value="user"${u.role==='user'?' selected':''}>user</option>
           <option value="admin"${u.role==='admin'?' selected':''}>admin</option>
         </select>
-      </td>
-    </tr>`).join('')}
-    </table>`
+      </td></tr>`).join('') +
+    `</table>`
 }
 
-window.updateUserRole = async (uid, nr) => {
-  const { error } = await supabase.from('user_roles').upsert({ id:uid, role:nr })
+async function updateUserRole(uid, nr) {
+  const { error } = await supabase.from('user_roles').upsert({ id: uid, role: nr })
   if (error) alert(error.message)
 }
 
-window.toggleView = () => {
-  const adminApp = document.getElementById('adminApp')
-  const btn = document.getElementById('toggleViewBtn')
-  const isHidden = adminApp.style.display === 'none'
-  adminApp.style.display = isHidden ? 'block' : 'none'
-  btn.textContent = isHidden ? '🔄 Zur Benutzeransicht' : '🔧 Zur Adminansicht'
-  document.getElementById(isHidden ? 'adminApp' : 'userApp')
-    .scrollIntoView({ behavior: 'smooth' })
+async function exportOrders() {
+  const { data, error } = await supabase.rpc('export_orders')
+  if (error) return alert(error.message)
+  const blob = new Blob([data], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  document.getElementById('exportLink').innerHTML = `<a href="${url}" download="orders.csv">Download CSV</a>`
 }
 
-// — Nutzer-Bestellungen
+// ——  USER BESTELLUNG ————————————————
+
 async function renderMenus() {
   const week = document.getElementById('weekSelect').value
+  const location = document.getElementById('locationSelect').value
   const { data: mdata } = await supabase.from('menus').select('*').eq('week', week)
   const map = {}
-  mdata.forEach(m => { map[m.weekday] = map[m.weekday] || []; map[m.weekday].push(m) })
+  mdata.forEach(m=>{ if(!map[m.weekday]) map[m.weekday]=[]; map[m.weekday].push(m) })
+
   const cont = document.getElementById('menusContainer')
   cont.innerHTML = ''
-
   days.forEach(day => {
     const sec = document.createElement('div')
     sec.className = 'menu-section'
     sec.innerHTML = `<h4>${day}</h4>`
-    ;(map[day]||[]).forEach(m => {
-      const expired = m.deadline && Date.now() > new Date(m.deadline).getTime()
+    ;(map[day]||[]).forEach(m=>{
+      const expired = m.deadline && Date.now()>new Date(m.deadline).getTime()
       const r = document.createElement('input')
-      r.type = 'radio'; r.name = day; r.value = m.menu_name; r.disabled = expired; r.id = `${day}_${m.id}`
+      r.type='radio'; r.name=day; r.value=m.menu_name; r.disabled=expired; r.id=`${day}_${m.id}`
       const l = document.createElement('label')
       l.htmlFor = r.id; l.textContent = m.menu_name
-      sec.append(r, l)
+      sec.append(r,l)
     })
     const rr = document.createElement('input')
-    rr.type = 'radio'; rr.name = day; rr.value = '__KEINESSEN__'; rr.id = `${day}_none`
+    rr.type='radio'; rr.name=day; rr.value='__KEINESSEN__'; rr.id=`${day}_none`
     const ll = document.createElement('label')
     ll.htmlFor = rr.id; ll.textContent = 'Kein Essen'
-    sec.append(rr, ll)
+    sec.append(rr,ll)
     cont.appendChild(sec)
   })
   setTimeout(loadPreviousSelections, 50)
@@ -276,8 +275,9 @@ async function renderMenus() {
 async function loadPreviousSelections() {
   const name = document.getElementById('nameInput').value
   const week = document.getElementById('weekSelect').value
-  if (!name||!week) return
-  const { data } = await supabase.from('orders').select('weekday,menu').eq('name',name).eq('week',week)
+  if (!name || !week) return
+  const { data } = await supabase.from('orders').select('weekday,menu')
+    .eq('name', name).eq('week', week)
   data.forEach(o => {
     const val = o.menu || '__KEINESSEN__'
     const btn = document.querySelector(`input[name="${o.weekday}"][value="${val}"]`)
@@ -288,18 +288,20 @@ async function loadPreviousSelections() {
 async function submitOrder() {
   const name = document.getElementById('nameInput').value
   const week = document.getElementById('weekSelect').value
-  const location = document.getElementById('locationSelect').value
-  if (!name||!week||!location) return alert('Bitte alles ausfüllen!')
+  const loc = document.getElementById('locationSelect').value
+  if (!name || !week || !loc) return alert('Bitte alles ausfüllen!')
   const { data: mdata } = await supabase.from('menus').select('*').eq('week', week)
-  const map = {}; mdata.forEach(m=>{ map[m.weekday]=map[m.weekday]||[]; map[m.weekday].push(m) })
+  const map = {}
+  mdata.forEach(m=>{ if(!map[m.weekday]) map[m.weekday]=[]; map[m.weekday].push(m) })
   for (let day of days) {
     const btn = document.querySelector(`input[name="${day}"]:checked`)
-    const expired = map[day]?.find(m=>m.menu_name===btn?.value)?.deadline && Date.now() > new Date(map[day].find(m=>m.menu_name===btn.value).deadline).getTime()
+    const expired = btn && map[day]?.find(m => m.menu_name=== btn.value)?.deadline
+      && Date.now()>new Date(map[day].find(m=>m.menu_name===btn.value).deadline).getTime()
     if (!btn || expired) continue
     const menu = btn.value==='__KEINESSEN__' ? '' : btn.value
     const status = menu ? 'bestellt' : 'abbestellt'
     await supabase.from('orders').upsert({
-      name, week, location, weekday:day, menu, status
+      name, week, location: loc, weekday: day, menu, status
     }, { onConflict:['name','week','location','weekday'] })
   }
   alert('Bestellung gespeichert!')
@@ -310,18 +312,51 @@ async function showOverview() {
   const name = document.getElementById('nameInput').value
   const week = document.getElementById('weekSelect').value
   if (!name || !week) return
-  const { data } = await supabase.from('orders').select('weekday,menu,status').eq('name',name).eq('week',week)
+  const { data } = await supabase.from('orders').select('weekday,menu,status')
+    .eq('name', name).eq('week', week)
   const cont = document.getElementById('overview')
   if (!data.length) return cont.innerHTML = '<p>Keine Bestellungen</p>'
-  cont.innerHTML = `<h3>Meine Bestellungen</h3><ul>${
-    data.map(o=>`<li>${o.weekday}: ${o.menu||'-'} (${o.status})</li>`).join('')
-  }</ul>`
+  cont.innerHTML = `<h3>Meine Bestellungen</h3><ul>` +
+    data.map(o=>`<li>${o.weekday}: ${o.menu || '-'} (${o.status})</li>`).join('') +
+    `</ul>`
 }
-window.renderMenus    = renderMenus;
-window.submitOrder    = submitOrder;
-window.showOverview   = showOverview;
-window.toggleView     = toggleView;
-window.signin         = signin;
-window.signup         = signup;
-window.resetPassword  = resetPassword;
-window.toggleUserView = toggleUserView; // wenn genutzt
+
+// ——  🔁 Toggle Funktionen ————————————————————
+
+function toggleUserView() {
+  document.getElementById('adminApp').style.display = 'none'
+  document.getElementById('userApp').scrollIntoView({ behavior: 'smooth' })
+}
+
+function toggleView() {
+  const userApp = document.getElementById('userApp')
+  const adminApp = document.getElementById('adminApp')
+  const btn = document.getElementById('toggleViewBtn')
+  if (adminApp.style.display === 'none') {
+    adminApp.style.display = 'block'
+    btn.textContent = '🔄 Zur Benutzeransicht'
+  } else {
+    adminApp.style.display = 'none'
+    btn.textContent = '🔧 Zur Adminansicht'
+    userApp.scrollIntoView({ behavior: 'smooth' })
+  }
+}
+
+// ——  ⚙️ Globale Funktionen verfügbar machen für onclick —————
+
+window.signin         = signin
+window.signup         = signup
+window.resetPassword  = resetPassword
+window.signOut        = signOut
+window.renderMenus    = renderMenus
+window.submitOrder    = submitOrder
+window.loadPreviousSelections = loadPreviousSelections
+window.showOverview   = showOverview
+window.renderMenuEditor = renderMenuEditor
+window.addMenuRow     = addMenuRow
+window.saveSingleMenu = saveSingleMenu
+window.deleteMenu     = deleteMenu
+window.exportOrders   = exportOrders
+window.updateUserRole = updateUserRole
+window.toggleUserView = toggleUserView
+window.toggleView     = toggleView
